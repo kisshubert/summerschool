@@ -1,33 +1,34 @@
 const games = {
   dictator: {
     title: "Dictator Game",
-    intro: "Tienes 100 tokens. Decide cuantos das a otra persona anonima. La otra persona no puede responder.",
+    intro: "You receive 100 tokens. Decide how many tokens to give to an anonymous participant. They cannot respond.",
     render: renderDictator
   },
   ultimatum: {
     title: "Ultimatum Game",
-    intro: "Propone un reparto de 100 tokens. Si la otra persona acepta, ambos cobran. Si rechaza, ambos reciben 0.",
+    intro: "Propose a split of 100 tokens. If the responder accepts, both players are paid. If they reject, both receive zero.",
     render: renderUltimatum
   },
   public: {
     title: "Public Goods Game",
-    intro: "Cuatro estudiantes reciben 50 tokens. Cada contribucion al fondo comun se multiplica y se reparte por igual.",
+    intro: "Four participants receive 50 tokens. Contributions to the public account are multiplied and shared equally.",
     render: renderPublicGoods
   },
   trust: {
     title: "Trust Game",
-    intro: "Envia tokens a una pareja anonima. Lo enviado se triplica, y luego la pareja decide cuanto devuelve.",
+    intro: "Send tokens to an anonymous partner. The sent amount is tripled, and the partner decides how much to return.",
     render: renderTrust
   },
   results: {
-    title: "Resultados",
-    intro: "Compara tus decisiones y prepara preguntas para debatir en la Summer School.",
+    title: "My Results",
+    intro: "Review your saved decisions before the class discussion.",
     render: renderResults
   }
 };
 
 const state = {
   current: "dictator",
+  participant: null,
   total: 0,
   completed: {
     dictator: null,
@@ -42,32 +43,70 @@ const totalPayoff = document.querySelector("#totalPayoff");
 const navButtons = [...document.querySelectorAll(".nav-button")];
 const resetButton = document.querySelector("#resetButton");
 
-navButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    state.current = button.dataset.game;
+init();
+
+async function init() {
+  const saved = localStorage.getItem("summerSchoolParticipant");
+  if (saved) {
+    state.participant = JSON.parse(saved);
+    await loadParticipantResults();
+  }
+  bindNavigation();
+  render();
+}
+
+function bindNavigation() {
+  navButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.current = button.dataset.game;
+      render();
+    });
+  });
+
+  resetButton.addEventListener("click", () => {
+    localStorage.removeItem("summerSchoolParticipant");
+    state.participant = null;
+    state.total = 0;
+    Object.keys(state.completed).forEach((key) => {
+      state.completed[key] = null;
+    });
+    state.current = "dictator";
     render();
   });
-});
+}
 
-resetButton.addEventListener("click", () => {
-  state.total = 0;
-  Object.keys(state.completed).forEach((key) => {
-    state.completed[key] = null;
-  });
-  state.current = "dictator";
-  render();
-});
+async function loadParticipantResults() {
+  if (!state.participant) return;
+  try {
+    const response = await fetch(`/api/participant/${state.participant.id}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    Object.keys(state.completed).forEach((key) => {
+      state.completed[key] = data.decisions[key] || null;
+    });
+    state.total = data.total || 0;
+    totalPayoff.textContent = state.total;
+  } catch {
+    showNetworkWarning();
+  }
+}
 
 function render() {
   navButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.game === state.current);
   });
   totalPayoff.textContent = state.total;
+
+  if (!state.participant) {
+    renderJoin();
+    return;
+  }
+
   const game = games[state.current];
   stage.innerHTML = `
     <div class="game-header">
       <div>
-        <span class="badge">Interactive session</span>
+        <span class="badge">${escapeHtml(state.participant.label)}</span>
         <h2>${game.title}</h2>
         <p>${game.intro}</p>
       </div>
@@ -78,50 +117,108 @@ function render() {
   game.render(document.querySelector("#gameBody"));
 }
 
+function renderJoin() {
+  stage.innerHTML = `
+    <div class="join-screen">
+      <span class="badge">Live classroom session</span>
+      <h2>Join the experiment</h2>
+      <p>Enter a nickname or participant code. Your choices will be saved anonymously for the instructor's aggregate results.</p>
+      <form id="joinForm" class="join-form">
+        <label for="participantName">Participant name or code</label>
+        <input id="participantName" name="participantName" type="text" autocomplete="name" maxlength="80" required placeholder="e.g. Student 12">
+        <button class="primary-button" type="submit">Start</button>
+      </form>
+      <p class="small-note">Use one device per participant. If you refresh the page, your device will keep the same participant session.</p>
+    </div>
+  `;
+
+  document.querySelector("#joinForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = document.querySelector("#participantName").value.trim();
+    if (!name) return;
+    const button = event.submitter;
+    button.disabled = true;
+    button.textContent = "Joining...";
+    try {
+      const response = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      });
+      if (!response.ok) throw new Error("Could not create session");
+      state.participant = await response.json();
+      localStorage.setItem("summerSchoolParticipant", JSON.stringify(state.participant));
+      await loadParticipantResults();
+      render();
+    } catch {
+      button.disabled = false;
+      button.textContent = "Start";
+      stage.querySelector(".join-screen").insertAdjacentHTML("beforeend", `<div class="feedback error">Could not connect to the classroom server. Please try again.</div>`);
+    }
+  });
+}
+
 function coinStack(count) {
   return `<div class="coin-stack">${Array.from({ length: count }, () => '<span class="coin"></span>').join("")}</div>`;
 }
 
-function setResult(game, payoff, data) {
-  const previous = state.completed[game];
-  if (previous) {
-    state.total -= previous.payoff;
+async function saveDecision(game, values, feedbackNode) {
+  if (!state.participant) return;
+  feedbackNode.textContent = "Saving decision...";
+  feedbackNode.classList.remove("error");
+
+  try {
+    const response = await fetch("/api/decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        participantId: state.participant.id,
+        game,
+        values
+      })
+    });
+    if (!response.ok) throw new Error("Save failed");
+    const data = await response.json();
+    state.completed[game] = data.decision;
+    state.total = data.total;
+    totalPayoff.textContent = state.total;
+    feedbackNode.textContent = data.message;
+  } catch {
+    feedbackNode.classList.add("error");
+    feedbackNode.textContent = "The decision could not be saved. Please check the connection and try again.";
   }
-  state.completed[game] = { payoff, ...data };
-  state.total += payoff;
-  totalPayoff.textContent = state.total;
 }
 
 function renderDictator(root) {
   root.innerHTML = `
     <div class="decision-grid">
       <div class="panel">
-        <h3>Tu decision</h3>
+        <h3>Your decision</h3>
         <div class="slider-row">
           <label for="dictatorGive">
-            <span>Dar a la otra persona</span>
+            <span>Give to the other participant</span>
             <strong><span id="dictatorValue">30</span> tokens</strong>
           </label>
-          <input id="dictatorGive" type="range" min="0" max="100" step="5" value="30">
+          <input id="dictatorGive" type="range" min="0" max="100" step="5" value="${state.completed.dictator?.values.give ?? 30}">
         </div>
         <div class="split-view">
           <div class="person">
-            <strong>Tu pago</strong>
+            <strong>Your payoff</strong>
             <div class="meter"><span id="dictatorYou"></span></div>
             <p><span id="dictatorYouText">70</span> tokens</p>
           </div>
           <div class="person">
-            <strong>Otra persona</strong>
+            <strong>Other participant</strong>
             <div class="meter"><span id="dictatorOther"></span></div>
             <p><span id="dictatorOtherText">30</span> tokens</p>
           </div>
         </div>
-        <button class="primary-button" id="dictatorSubmit">Confirmar decision</button>
-        <div class="feedback" id="dictatorFeedback">Observa como cambia el reparto antes de confirmar.</div>
+        <button class="primary-button" id="dictatorSubmit">Save decision</button>
+        <div class="feedback" id="dictatorFeedback">${savedText("dictator")}</div>
       </div>
       <div class="panel">
-        <h3>Pregunta de clase</h3>
-        <p>Sin castigo ni reputacion, este juego mide preferencias sociales: altruismo, equidad y aversion a la desigualdad.</p>
+        <h3>Discussion prompt</h3>
+        <p>With no punishment or reputation, this game measures social preferences: altruism, fairness, and inequality aversion.</p>
       </div>
     </div>
   `;
@@ -139,10 +236,7 @@ function renderDictator(root) {
   };
   slider.addEventListener("input", update);
   root.querySelector("#dictatorSubmit").addEventListener("click", () => {
-    const give = Number(slider.value);
-    const keep = 100 - give;
-    setResult("dictator", keep, { give });
-    feedback.textContent = `Confirmado: conservas ${keep} y das ${give}. En clase podemos comparar si el promedio se acerca a 0, 50 o algo intermedio.`;
+    saveDecision("dictator", { give: Number(slider.value) }, feedback);
   });
   update();
 }
@@ -151,185 +245,158 @@ function renderUltimatum(root) {
   root.innerHTML = `
     <div class="decision-grid">
       <div class="panel">
-        <h3>Haz una oferta</h3>
+        <h3>Make an offer</h3>
         <div class="slider-row">
           <label for="ultimatumOffer">
-            <span>Oferta para la otra persona</span>
+            <span>Offer to the responder</span>
             <strong><span id="ultimatumValue">40</span> tokens</strong>
           </label>
-          <input id="ultimatumOffer" type="range" min="0" max="100" step="5" value="40">
+          <input id="ultimatumOffer" type="range" min="0" max="100" step="5" value="${state.completed.ultimatum?.values.offer ?? 40}">
         </div>
-        <button class="primary-button" id="ultimatumSubmit">Enviar oferta</button>
-        <div class="feedback" id="ultimatumFeedback">La probabilidad de rechazo sube cuando la oferta parece injusta.</div>
+        <button class="primary-button" id="ultimatumSubmit">Save offer</button>
+        <div class="feedback" id="ultimatumFeedback">${savedText("ultimatum")}</div>
       </div>
       <div class="panel">
-        <h3>Regla de respuesta</h3>
+        <h3>Responder rule</h3>
         <table class="matrix">
-          <tr><th>Oferta</th><th>Respuesta probable</th></tr>
-          <tr><td>0-15</td><td>Rechazo casi seguro</td></tr>
-          <tr><td>20-35</td><td>Riesgo de rechazo</td></tr>
-          <tr><td>40-100</td><td>Aceptacion probable</td></tr>
+          <tr><th>Offer</th><th>Likely response</th></tr>
+          <tr><td>0-15</td><td>Very likely rejection</td></tr>
+          <tr><td>20-35</td><td>Risk of rejection</td></tr>
+          <tr><td>40-100</td><td>Likely acceptance</td></tr>
         </table>
       </div>
     </div>
   `;
 
   const slider = root.querySelector("#ultimatumOffer");
-  slider.addEventListener("input", () => {
+  const feedback = root.querySelector("#ultimatumFeedback");
+  const update = () => {
     root.querySelector("#ultimatumValue").textContent = slider.value;
-  });
+  };
+  slider.addEventListener("input", update);
   root.querySelector("#ultimatumSubmit").addEventListener("click", () => {
-    const offer = Number(slider.value);
-    const acceptanceChance = offer < 20 ? 0.15 : offer < 40 ? 0.55 : 0.92;
-    const accepted = Math.random() < acceptanceChance;
-    const payoff = accepted ? 100 - offer : 0;
-    setResult("ultimatum", payoff, { offer, accepted });
-    root.querySelector("#ultimatumFeedback").textContent = accepted
-      ? `Aceptada. Tu pago es ${payoff}; la otra persona recibe ${offer}. La equidad compro silencio al conflicto.`
-      : `Rechazada. Ambos reciben 0. Aqui aparece el coste real de castigar una oferta percibida como injusta.`;
+    saveDecision("ultimatum", { offer: Number(slider.value) }, feedback);
   });
+  update();
 }
 
 function renderPublicGoods(root) {
   root.innerHTML = `
     <div class="decision-grid">
       <div class="panel">
-        <h3>Tu contribucion</h3>
+        <h3>Your contribution</h3>
         <div class="slider-row">
           <label for="publicContribution">
-            <span>Aportar al fondo comun</span>
+            <span>Contribute to the public account</span>
             <strong><span id="publicValue">20</span> tokens</strong>
           </label>
-          <input id="publicContribution" type="range" min="0" max="50" step="5" value="20">
+          <input id="publicContribution" type="range" min="0" max="50" step="5" value="${state.completed.public?.values.contribution ?? 20}">
         </div>
-        <button class="primary-button" id="publicSubmit">Jugar ronda</button>
-        <div class="feedback" id="publicFeedback">Los otros tres participantes toman decisiones simuladas.</div>
+        <button class="primary-button" id="publicSubmit">Save contribution</button>
+        <div class="feedback" id="publicFeedback">${savedText("public")}</div>
       </div>
       <div class="panel">
-        <h3>Formula</h3>
-        <p>Cada participante conserva lo no aportado. El fondo comun se multiplica por 1.6 y se reparte entre los cuatro.</p>
-        <table class="matrix" id="publicTable">
-          <tr><th>Jugador</th><th>Aporta</th></tr>
-          <tr><td>Tu</td><td>20</td></tr>
-          <tr><td>A</td><td>-</td></tr>
-          <tr><td>B</td><td>-</td></tr>
-          <tr><td>C</td><td>-</td></tr>
-        </table>
+        <h3>Mechanism</h3>
+        <p>Each participant keeps what they do not contribute. The public account is multiplied by 1.6 and shared equally among the four participants.</p>
       </div>
     </div>
   `;
 
   const slider = root.querySelector("#publicContribution");
-  slider.addEventListener("input", () => {
+  const feedback = root.querySelector("#publicFeedback");
+  const update = () => {
     root.querySelector("#publicValue").textContent = slider.value;
-    root.querySelector("#publicTable").rows[1].cells[1].textContent = slider.value;
-  });
+  };
+  slider.addEventListener("input", update);
   root.querySelector("#publicSubmit").addEventListener("click", () => {
-    const mine = Number(slider.value);
-    const others = [randomStep(0, 50, 5), randomStep(0, 50, 5), randomStep(0, 50, 5)];
-    const totalContribution = mine + others.reduce((sum, value) => sum + value, 0);
-    const sharedReturn = Math.round((totalContribution * 1.6) / 4);
-    const payoff = 50 - mine + sharedReturn;
-    setResult("public", payoff, { mine, others, sharedReturn });
-    const rows = root.querySelector("#publicTable").rows;
-    rows[2].cells[1].textContent = others[0];
-    rows[3].cells[1].textContent = others[1];
-    rows[4].cells[1].textContent = others[2];
-    root.querySelector("#publicFeedback").textContent = `El grupo aporto ${totalContribution}. Tu retorno comun fue ${sharedReturn}, asi que tu pago final es ${payoff}.`;
+    saveDecision("public", { contribution: Number(slider.value) }, feedback);
   });
+  update();
 }
 
 function renderTrust(root) {
   root.innerHTML = `
     <div class="decision-grid">
       <div class="panel">
-        <h3>Enviar confianza</h3>
+        <h3>Send trust</h3>
         <div class="slider-row">
           <label for="trustSend">
-            <span>Enviar a la pareja</span>
+            <span>Send to the partner</span>
             <strong><span id="trustValue">30</span> tokens</strong>
           </label>
-          <input id="trustSend" type="range" min="0" max="100" step="5" value="30">
+          <input id="trustSend" type="range" min="0" max="100" step="5" value="${state.completed.trust?.values.sent ?? 30}">
         </div>
-        <div class="choice-row" aria-label="Tipo de pareja simulada">
-          <button class="choice-button selected" data-type="fair">Justa</button>
-          <button class="choice-button" data-type="selfish">Egoista</button>
-          <button class="choice-button" data-type="random">Incierta</button>
-        </div>
-        <button class="primary-button" id="trustSubmit">Enviar</button>
-        <div class="feedback" id="trustFeedback">Elige tambien que tipo de pareja quieres simular.</div>
+        <button class="primary-button" id="trustSubmit">Save transfer</button>
+        <div class="feedback" id="trustFeedback">${savedText("trust")}</div>
       </div>
       <div class="panel">
-        <h3>Mecanica</h3>
-        <p>La cantidad enviada se triplica. La pareja puede devolver una parte. El dilema: mas confianza crea mas valor, pero tambien mas exposicion.</p>
+        <h3>Mechanism</h3>
+        <p>The amount sent is tripled. The partner may return part of it. The dilemma: more trust creates more value, but also more exposure.</p>
       </div>
     </div>
   `;
 
-  let partnerType = "fair";
   const slider = root.querySelector("#trustSend");
-  slider.addEventListener("input", () => {
+  const feedback = root.querySelector("#trustFeedback");
+  const update = () => {
     root.querySelector("#trustValue").textContent = slider.value;
-  });
-  root.querySelectorAll(".choice-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      partnerType = button.dataset.type;
-      root.querySelectorAll(".choice-button").forEach((item) => item.classList.remove("selected"));
-      button.classList.add("selected");
-    });
-  });
+  };
+  slider.addEventListener("input", update);
   root.querySelector("#trustSubmit").addEventListener("click", () => {
-    const sent = Number(slider.value);
-    const tripled = sent * 3;
-    const returned = calculateReturn(tripled, partnerType);
-    const payoff = 100 - sent + returned;
-    setResult("trust", payoff, { sent, returned, partnerType });
-    root.querySelector("#trustFeedback").textContent = `Enviaste ${sent}; se convirtio en ${tripled}. La pareja devolvio ${returned}. Tu pago final es ${payoff}.`;
+    saveDecision("trust", { sent: Number(slider.value) }, feedback);
   });
+  update();
 }
 
 function renderResults(root) {
   const entries = [
-    ["Dictator Game", state.completed.dictator, (r) => `Diste ${r.give} y conservaste ${r.payoff}.`],
-    ["Ultimatum Game", state.completed.ultimatum, (r) => `Ofreciste ${r.offer}. Resultado: ${r.accepted ? "aceptado" : "rechazado"}.`],
-    ["Public Goods", state.completed.public, (r) => `Aportaste ${r.mine}; retorno comun: ${r.sharedReturn}.`],
-    ["Trust Game", state.completed.trust, (r) => `Enviaste ${r.sent}; recibiste ${r.returned} de vuelta.`]
+    ["Dictator Game", state.completed.dictator, (r) => `You gave ${r.values.give} and kept ${r.payoff}.`],
+    ["Ultimatum Game", state.completed.ultimatum, (r) => `You offered ${r.values.offer}. Outcome: ${r.outcome.accepted ? "accepted" : "rejected"}.`],
+    ["Public Goods", state.completed.public, (r) => `You contributed ${r.values.contribution}. Your simulated group return was ${r.outcome.sharedReturn}.`],
+    ["Trust Game", state.completed.trust, (r) => `You sent ${r.values.sent}; the partner returned ${r.outcome.returned}.`]
   ];
 
   root.innerHTML = `
     <div class="panel">
-      <h3>Resumen de decisiones</h3>
+      <h3>Saved decisions</h3>
       <div class="results-grid">
         ${entries.map(([name, result, describe]) => `
           <div class="result-card">
             <strong>${name}</strong>
-            <p>${result ? describe(result) : "Pendiente. Juega esta ronda para ver el resultado."}</p>
-            <span class="badge">${result ? `${result.payoff} tokens` : "Sin jugar"}</span>
+            <p>${result ? describe(result) : "Pending. Play this round to save a result."}</p>
+            <span class="badge">${result ? `${result.payoff} tokens` : "Not saved"}</span>
           </div>
         `).join("")}
       </div>
     </div>
     <div class="panel" style="margin-top:16px">
-      <h3>Preguntas para discusion</h3>
+      <h3>Class discussion</h3>
       <table class="matrix">
-        <tr><th>Tema</th><th>Pregunta</th></tr>
-        <tr><td>Equidad</td><td>Cuando una oferta baja se rechaza, es irracional o expresa una norma social?</td></tr>
-        <tr><td>Cooperacion</td><td>Que instituciones aumentarian la contribucion al bien publico?</td></tr>
-        <tr><td>Confianza</td><td>Que informacion necesitarias para enviar mas tokens?</td></tr>
+        <tr><th>Theme</th><th>Question</th></tr>
+        <tr><td>Fairness</td><td>When a low offer is rejected, is it irrational, or does it express a social norm?</td></tr>
+        <tr><td>Cooperation</td><td>Which institutions would increase contributions to the public good?</td></tr>
+        <tr><td>Trust</td><td>What information would make you send more tokens?</td></tr>
       </table>
     </div>
   `;
 }
 
-function randomStep(min, max, step) {
-  const slots = (max - min) / step;
-  return min + Math.round(Math.random() * slots) * step;
+function savedText(game) {
+  const result = state.completed[game];
+  if (!result) return "Move the control, then save your decision.";
+  return `Saved. Your payoff for this game is ${result.payoff} tokens. You can update the decision before the instructor closes the activity.`;
 }
 
-function calculateReturn(amount, type) {
-  if (type === "fair") return Math.round(amount * 0.45);
-  if (type === "selfish") return Math.round(amount * 0.12);
-  return Math.round(amount * (0.1 + Math.random() * 0.5));
+function showNetworkWarning() {
+  stage.innerHTML = `<div class="feedback error">The classroom server is not available. Please reload the page or ask the instructor for the correct link.</div>`;
 }
 
-render();
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
