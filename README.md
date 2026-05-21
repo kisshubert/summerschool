@@ -1,34 +1,53 @@
-# Summer School Games
+# Summer School Experimental Economics Lab
 
-Juego web interactivo para una sesion de economia experimental en la Summer School.
+Multi-device classroom web app for a Summer School session on experimental economics.
 
-## Contenido
+Participants join from their own laptop, tablet, or phone, make decisions in several games, and the instructor can view live aggregate results.
 
-- `index.html`: pagina principal.
-- `styles.css`: diseno visual.
-- `script.js`: logica de los juegos.
-- `assets/lab-pattern.svg`: recurso visual de fondo.
-
-## Juegos incluidos
+## Games included
 
 - Dictator Game
 - Ultimatum Game
 - Public Goods Game
 - Trust Game
-- Pantalla de resultados y preguntas para discusion
+- Instructor results dashboard
+- CSV export
 
-## Como usarlo
+## Run locally
 
-Abre `index.html` en un navegador moderno. Tambien puedes subir toda la carpeta a cualquier hosting estatico, por ejemplo GitHub Pages, Netlify o el servidor interno de la universidad.
-
-Si prefieres usar un servidor local, entra en esta carpeta y ejecuta:
+Install Node.js 18 or newer, then run:
 
 ```bash
-python -m http.server 8765
+npm start
 ```
 
-Luego abre:
+Open:
 
 ```text
-http://127.0.0.1:8765/
+http://localhost:3000/
 ```
+
+Instructor dashboard:
+
+```text
+http://localhost:3000/admin.html
+```
+
+## Use in class
+
+For everyone to join from their own device, the app must run on a server that all devices can reach.
+
+Options:
+
+- Deploy it online, for example on Render, Railway, Fly.io, or a university server.
+- Run it on the classroom Wi-Fi from one computer and share that computer's local network address.
+
+The app stores decisions in:
+
+```text
+data/decisions.json
+```
+
+If you deploy online, use a persistent disk or database so the results survive server restarts.
+
+GitHub Pages alone is not enough for this version, because GitHub Pages cannot save participant decisions.
