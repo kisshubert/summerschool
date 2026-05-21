@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Instructor Results - Summer School Games</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Instructor View</p>
+        <h1>Class Results</h1>
+      </div>
+      <div class="scorebox">
+        <span>Participants</span>
+        <strong id="participantCount">0</strong>
+        <span>joined</span>
+      </div>
+    </header>
+
+    <main class="admin-shell">
+      <section class="stage">
+        <div class="admin-actions">
+          <a class="ghost-link" href="index.html">Participant page</a>
+          <a class="ghost-link" href="/api/export.csv">Download CSV</a>
+          <button class="ghost-button" id="refreshButton">Refresh</button>
+        </div>
+        <div id="adminContent" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="admin.js"></script>
+  </body>
+</html>
