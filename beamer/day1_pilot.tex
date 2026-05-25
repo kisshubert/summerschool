@@ -1,0 +1,85 @@
+\documentclass[aspectratio=169]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+\IfFileExists{theme_finance_mba.sty}{\usepackage{theme_finance_mba}}{\usepackage{beamer/theme_finance_mba}}
+
+\title[Investments Day 1]{Finance MBA -- Investments and Valuation: Day 1}
+\author{Instructor Name}
+\date{2027 Edition}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\section{1}
+
+\begin{frame}{Course Roadmap for Day 1}
+\begin{itemize}
+  \item Returns and risk: intuition and measurement
+  \item Hands-on assignment with two-stock starter sheet (APPLE, AMAZON)
+  \item Scaling to a broader market set
+  \item Gold versus stocks and bonds: role in portfolios
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Assignment Submission Rules}
+\begin{assignmentblock}{Formatting}
+\begin{itemize}
+  \item File name: \texttt{TeamName\_A1\_Day1.pdf}
+  \item First line inside file: assignment number and day
+  \item Include all team member names on the first slide/page
+  \item Submit via the agreed LMS channel before class end
+\end{itemize}
+\end{assignmentblock}
+\end{frame}
+
+\begin{frame}{Transition: From Market Data to Portfolio Logic}
+\begin{takeawayblock}
+First, we compute clean return series on a simple data set. Then, we expand the same logic to the full universe of assets.
+\end{takeawayblock}
+\end{frame}
+
+\begin{frame}{Assignment 1 Setup (Simplified Starter)}
+\begin{itemize}
+  \item Use only two assets first: APPLE and AMAZON
+  \item Keep exactly 10 years of data in the worksheet
+  \item Compute:
+    \begin{itemize}
+      \item simple and log returns,
+      \item average returns,
+      \item volatility,
+      \item covariance and correlation.
+    \end{itemize}
+  \item Validate formulas before scaling up.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Gold Versus Stocks and Bonds}
+\begin{tabular}{lccc}
+\toprule
+Asset class & Return focus & Volatility & Inflation hedge \\
+\midrule
+Equities & Growth & High & Partial \\
+Bonds & Income/stability & Low--medium & Weak--moderate \\
+Gold & Diversification & Medium--high & Often stronger \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.75em}
+\begin{takeawayblock}
+Gold can improve diversification, but its standalone volatility and long flat periods require context.
+\end{takeawayblock}
+\end{frame}
+
+\begin{frame}{End-of-Day Recap}
+\begin{itemize}
+  \item We built returns from raw prices in a transparent way.
+  \item We practiced on a two-stock example before full-scale computation.
+  \item We compared gold with equities and bonds in portfolio terms.
+\end{itemize}
+\end{frame}
+
+\end{document}
