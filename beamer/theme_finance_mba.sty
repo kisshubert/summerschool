@@ -1,0 +1,54 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{theme_finance_mba}[2026/05/25 Finance MBA beamer style]
+
+\mode<presentation>
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\definecolor{FinanceBlue}{RGB}{22,62,122}
+\definecolor{FinanceGold}{RGB}{180,140,40}
+\definecolor{FinanceGray}{RGB}{60,60,60}
+
+\setbeamercolor{palette primary}{bg=FinanceBlue, fg=white}
+\setbeamercolor{frametitle}{bg=FinanceBlue, fg=white}
+\setbeamercolor{title}{fg=FinanceBlue}
+\setbeamercolor{structure}{fg=FinanceBlue}
+\setbeamercolor{block title}{bg=FinanceBlue!90,fg=white}
+\setbeamercolor{block body}{bg=FinanceBlue!5,fg=black}
+\setbeamercolor{block title alerted}{bg=FinanceGold!90,fg=black}
+\setbeamercolor{block body alerted}{bg=FinanceGold!15,fg=black}
+
+\setbeamerfont{title}{series=\bfseries,size=\Large}
+\setbeamerfont{frametitle}{series=\bfseries,size=\large}
+\setbeamerfont{block title}{series=\bfseries}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.33\paperwidth,ht=2.5ex,dp=1ex,left]{author in head/foot}
+      \hspace{1em}Finance MBA
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.47\paperwidth,ht=2.5ex,dp=1ex,center]{title in head/foot}
+      \insertshorttitle{} -- Day \insertsectionnumber
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.20\paperwidth,ht=2.5ex,dp=1ex,right]{date in head/foot}
+      \insertframenumber{} / \inserttotalframenumber\hspace{1em}
+    \end{beamercolorbox}%
+  }
+}
+
+\newenvironment{assignmentblock}[1]{
+\begin{alertblock}{Assignment #1}
+}{
+\end{alertblock}
+}
+
+\newenvironment{takeawayblock}{
+\begin{block}{Key takeaway}
+}{
+\end{block}
+}
+
+\mode<all>
